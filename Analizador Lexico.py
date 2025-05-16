@@ -42,8 +42,6 @@ class AnalizadorLexico:
         peek_pos = self.posicion + 1
         return self.codigo_fuente[peek_pos] if peek_pos < len(self.codigo_fuente) else None
 
-    #Obtener tokens
-    
     def obtener_siguiente_token(self):
         self.ignorar_espacios_y_comentarios()
 
@@ -51,7 +49,7 @@ class AnalizadorLexico:
             return Token('FIN_DE_ARCHIVO', None, self.linea, self.columna)
 
         if self.caracter_actual.isalpha() or self.caracter_actual == '_':
-            return self.obtener_identificador_o_palabra_reservada()
+            return self.obtener_id_o_pal_res()
 
         elif self.caracter_actual.isdigit():
             return self.obtener_numero()
@@ -129,7 +127,7 @@ class AnalizadorLexico:
     def obtener_cadena(self):
         cadena = ''
         col_inicio = self.columna
-        self.avanzar()  
+        self.avanzar()
 
         while self.caracter_actual is not None and self.caracter_actual != "'":
             cadena += self.caracter_actual
@@ -176,7 +174,8 @@ class AnalizadorLexico:
             ']': 'CORCHETE_DER',
             ';': 'PUNTO_Y_COMA',
             ',': 'COMA',
-            '.': 'PUNTO'
+            '.': 'PUNTO',
+            ':': 'DOS_PUNTOS'
         }
 
         if simbolo in tipos_simbolos:
@@ -185,3 +184,27 @@ class AnalizadorLexico:
         else:
             raise Exception(f"Símbolo desconocido '{simbolo}' en línea {self.linea}, col {self.columna}")
 
+
+# 🔽 Leer código desde archivo
+nombre_archivo = 'Pendiente.pas'
+with open(nombre_archivo, 'r') as archivo:
+    codigo = archivo.read()
+
+print("Contenido del archivo:")
+print(codigo)
+print("___________________________\n")
+
+# 🔽 Ejecutar analizador
+analizador = AnalizadorLexico(codigo)
+tokens = []
+
+while True:
+    token = analizador.obtener_siguiente_token()
+    tokens.append(token)
+    if token.tipo == 'FIN_DE_ARCHIVO':
+        break
+
+# 🔽 Imprimir tokens
+print("Tokens encontrados:")
+for t in tokens:
+    print(t)
