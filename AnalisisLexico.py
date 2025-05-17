@@ -1,5 +1,5 @@
 # Etapa 1 del analisis lexico: cargar archivos
-with open('Intrinseca.pas', 'r') as archivo:
+with open('Pendiente.pas', 'r') as archivo:
     texto = archivo.read()
 
 # Lista de separadores y especiales
@@ -41,15 +41,22 @@ def quitar_comentarios(texto):
 
 texto_sin_comentarios = quitar_comentarios(texto)
 
-print("Código sin comentarios:\n")
-print(texto_sin_comentarios)
-print("\n_________________________\n")
-
 # Etapa 3 del analisis lexico: separar en tokens
 tokens = []
 token = ''
+i = 0
+n = len(texto_sin_comentarios)
 
-for letra in texto_sin_comentarios:
+while i < n:
+    if i < n-1 and texto_sin_comentarios[i] == ':' and texto_sin_comentarios[i+1] == '=':
+        if token:
+            tokens.append(token)
+            token = ''
+        tokens.append(':=')
+        i += 2
+        continue
+        
+    letra = texto_sin_comentarios[i]
     if letra in separadores:
         if token:
             tokens.append(token)
@@ -61,25 +68,32 @@ for letra in texto_sin_comentarios:
         tokens.append(letra)
     else:
         token += letra
+    i += 1
 
 if token:
     tokens.append(token)
 
-# Etapa 4 del analisis lexico: etiquetar tokens
+# Etapa 4: Etiquetado  de tokens
 def get_etiqueta(t):
-    operadores = {
-        "+", "-", "*", "/", "=", "<>", "<", ">", "<=", ">=", ":=", ":", ";", ",", ".", "(", ")", "[", "]", "'"
-    }
-    minusculas = 'abcdefghijklmnopqrstuvwxyz_'
-    mayusculas = minusculas.upper()
-
+    
+    operadores_asignacion = {':='}
+    operadores_aritmeticos = {'+', '-', '*', '/', 'DIV', 'MOD'}
+    operadores_comparacion = {'=', '<>', '<', '>', '<=', '>='}
+    delimitadores = {';', ',', '(', ')', '[', ']', '{', '}', '.', ':'}
+    
     if t.upper() in funciones_intrinsecas:
         return 'función intrínseca'
-    elif t in operadores:
-        return 'símbolo'
+    elif t in operadores_asignacion:
+        return 'operador de asignación'
+    elif t in operadores_aritmeticos:
+        return 'operador aritmético'
+    elif t in operadores_comparacion:
+        return 'operador de comparación'
+    elif t in delimitadores:
+        return 'delimitador'
     elif t.upper() in palabras_reservadas:
         return 'palabra reservada'
-    elif t[0] in minusculas or t[0] in mayusculas:
+    elif t[0].isalpha() or t[0] == '_':
         return 'identificador'
     elif t[0].isdigit():
         return 'entero'
@@ -87,5 +101,6 @@ def get_etiqueta(t):
         return 'desconocido'
 
 # Mostrar tokens con sus etiquetas
+print("=== Tokens reconocidos ===")
 for t in tokens:
-    print(f"{t} → {get_etiqueta(t)}")
+    print(f"{t:>10} → {get_etiqueta(t)}")
