@@ -186,7 +186,7 @@ class AnalizadorLexico:
 
 
 # 🔽 Leer código desde archivo
-nombre_archivo = 'Pendiente.pas'
+nombre_archivo = 'Intrinseca.pas'
 with open(nombre_archivo, 'r') as archivo:
     codigo = archivo.read()
 

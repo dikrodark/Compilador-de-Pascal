@@ -1,28 +1,22 @@
-program FuncionesTrigonométricas;
+program FuncionTrigonometrica;
 
-uses
-  crt, math;  { math para funciones trigonométricas }
-
-var
-  anguloGrados, anguloRadianes, senoVal, cosenoVal, tangenteVal: real;
+var anguloGrados: real;
+var anguloRadianes: real;
+var senoVal: real;
+var cosenoVal: real;
+var tangenteVal: real;
 
 begin
-  clrscr;
+write("Calculadora de funciones trigonométricas");
+write("Ingrese un ángulo en grados:");
+read(anguloGrados);
 
-  writeln('Calculadora de funciones trigonométricas');
-  writeln('Ingrese un ángulo en grados:');
-  readln(anguloGrados);
+anguloRadianes := anguloGrados * 3 / 180;
+senoVal := sin(anguloRadianes);
+cosenoVal := cos(anguloRadianes);
+tangenteVal := tan(anguloRadianes);
 
-  { Convertir grados a radianes: rad = grados * pi / 180 }
-  anguloRadianes := anguloGrados * Pi / 180;
+writeln("Seno = " , senoVal);
 
-  senoVal := sin(anguloRadianes);
-  cosenoVal := cos(anguloRadianes);
-  tangenteVal := tan(anguloRadianes);
 
-  writeln('Seno(', anguloGrados:0:2, ') = ', senoVal:0:4);
-  writeln('Coseno(', anguloGrados:0:2, ') = ', cosenoVal:0:4);
-  writeln('Tangente(', anguloGrados:0:2, ') = ', tangenteVal:0:4);
-
-  readln;
 end.

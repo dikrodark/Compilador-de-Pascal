@@ -1,31 +1,30 @@
-Python 3.11.4 (tags/v3.11.4:d2340ef, Jun  7 2023, 05:45:37) [MSC v.1934 64 bit (AMD64)] on win32
-Type "help", "copyright", "credits" or "license()" for more information.
->>> class AnalizadorSemantico:
-...     def __init__(self, tokens):
-...         self.tokens = tokens
-...         self.pos = 0
-...         self.tabla_simbolos = {}  # variable: tipo
-... 
-...     def token_actual(self):
-...         if self.pos < len(self.tokens):
-...             return self.tokens[self.pos]
-...         return None
-... 
-...     def avanzar(self):
-...         self.pos += 1
-... 
-...     def analizar(self):
-...         if not self._esperar('PROGRAM'): return
-...         self.avanzar()  # nombre del programa
-...         self.avanzar()  # ;
-...         self._analizar_declaraciones()
-...         if not self._esperar('BEGIN'): return
-...         self.avanzar()
-...         self._analizar_sentencias()
-...         if not self._esperar('END'): return
-...         self.avanzar()
-...         if not self._esperar('.'): return
-        print("Análisis semántico exitoso 🎉")
+class AnalizadorSemantico:
+     
+    def __init__(self, tokens):
+        self.tokens = tokens
+        self.pos = 0
+        self.tabla_simbolos = {}  # variable: tipo
+        
+    def token_actual(self):
+        if self.pos < len(self.tokens):
+            return self.tokens[self.pos]
+        return None
+
+    def avanzar(self):
+        self.pos += 1
+
+    def analizar(self):
+        if not self._esperar('PROGRAM'): return
+        self.avanzar()  # nombre del programa
+        self.avanzar()  # ;
+        self._analizar_declaraciones()
+        if not self._esperar('BEGIN'): return
+        self.avanzar()
+        self._analizar_sentencias()
+        if not self._esperar('END'): return
+        self.avanzar()
+        if not self._esperar('.'): return
+        print("Análisis semántico exitoso ")
 
     def _esperar(self, esperado):
         actual = self.token_actual()
