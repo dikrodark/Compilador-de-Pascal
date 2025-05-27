@@ -1,6 +1,11 @@
 # Etapa 1 del análisis léxico: cargar archivos
-with open('Intrinseca.pas', 'r') as archivo:
+with open('CicloFor.pas', 'r') as archivo:
     texto = archivo.read()
+
+print("=== CÓDIGO ORIGINAL ===")
+print(texto)
+print("=======================\n")
+
 
 # Lista de separadores y especiales
 separadores = [' ', '\t', '\n']
@@ -39,6 +44,11 @@ def quitar_comentarios(texto):
 
 texto_sin_comentarios = quitar_comentarios(texto)
 
+
+print("=== CÓDIGO SIN COMENTARIOS ===")
+print(texto_sin_comentarios)
+print("================================\n")
+
 # Etapa 3: separar en tokens (ahora con cadenas)
 tokens = []
 token = ''
@@ -75,14 +85,35 @@ while i < n:
         if token:
             tokens.append(token.lower())
             token = ''
+        i += 1
+        continue
+
     elif letra in especiales:
         if token:
             tokens.append(token.lower())
             token = ''
         tokens.append(letra.lower())
+        i += 1
+        continue
+
     else:
-        token += letra
-    i += 1
+        # Para manejar números reales: agregado robustez para puntos decimales únicos
+        if letra.isdigit() or letra == '.':
+            token += letra
+            i += 1
+            # Avanzamos mientras sigan dígitos o un solo punto decimal
+            punto_contado = token.count('.')
+            while i < n and (texto_sin_comentarios[i].isdigit() or (texto_sin_comentarios[i] == '.' and punto_contado == 0)):
+                if texto_sin_comentarios[i] == '.':
+                    punto_contado += 1
+                token += texto_sin_comentarios[i]
+                i += 1
+            tokens.append(token.lower())
+            token = ''
+        else:
+            token += letra
+            i += 1
+
 
 if token:
     tokens.append(token.lower())
@@ -110,13 +141,18 @@ def get_etiqueta(t):
         return 'palabra reservada'
     elif t[0].isalpha() or t[0] == '_':
         return 'identificador'
-    elif t[0].isdigit():
+    elif t.isdigit():
         return 'entero'
+    elif t.count('.') == 1 and all(part.isdigit() for part in t.split('.')):
+        return 'flotante'  # Cambiado de 'real' a 'flotante'
     else:
         return 'desconocido'
     
-
-
+print("=== TOKENS GENERADOS ===")
+for t in tokens:
+    print(f"{t:<20} => {get_etiqueta(t)}")
+print("=========================\n")
+    
 
 # === ANALIZADOR SINTÁCTICO ===
 
@@ -184,7 +220,9 @@ def analizar_programa():
 
     print("Análisis sintáctico finalizado correctamente.")
 
-
+    # Mostrar tabla de símbolos al final
+    print("\n=== TABLA DE SÍMBOLOS ===")
+    imprimir_tabla()
 
 def declaracion_variable():
     if not es_identificador():
@@ -203,6 +241,15 @@ def declaracion_variable():
 
     print(f"[gen] declarar variable '{var_name}' de tipo '{tipo}'")
 
+    tipo_mapeado = {
+        'real': 'float',
+        'integer': 'int',
+        'boolean': 'int',
+        'char': 'char',
+        'string': 'string'
+    }[tipo]
+
+    agregar_variable(var_name, tipo_mapeado)
 
 def sentencia():
     if es_identificador():
@@ -225,21 +272,46 @@ def asignacion():
     print(f"[gen] Guardar resultado de expresión en '{id_nombre}'")
 
 def for_loop():
-    coincidir('for')
+    if not coincidir('for'):
+        error("Se esperaba 'for'")
+
+    if not coincidir('('):
+        error("Se esperaba '(' después de 'for'")
+
     var = actual()
     if not es_identificador():
-        error("Se esperaba un identificador en bucle for")
+        error("Se esperaba un identificador en el for")
     coincidir(var)
+
     if not coincidir(':='):
-        error("Se esperaba ':=' en bucle for")
-    expresion()
-    if not (coincidir('to') or coincidir('downto')):
-        error("Se esperaba 'to' o 'downto' en bucle for")
-    expresion()
-    if not coincidir('do'):
-        error("Se esperaba 'do' en bucle for")
-    sentencia()
-    print(f"[gen] bucle for sobre '{var}'")
+        error("Se esperaba ':=' en la asignación del for")
+
+    expresion()  # expresión de inicio
+
+    if not coincidir(';'):
+        error("Se esperaba ';' entre la asignación y el límite del for")
+
+    expresion()  # expresión de fin
+
+    if not coincidir(')'):
+        error("Se esperaba ')' al final del encabezado del for")
+
+    if not coincidir('{'):
+        error("Se esperaba '{' para abrir el bloque del for")
+
+    print(f"[gen] inicio bucle for con variable '{var}'")
+
+    while actual() != '}':
+        if actual() is None:
+            error("Se esperaba '}' para cerrar el bloque del for")
+        sentencia()
+        if actual() == ';':
+            coincidir(';')
+
+    if not coincidir('}'):
+        error("Se esperaba '}' al final del bloque del for")
+
+    print(f"[gen] fin del bucle for con variable '{var}'")
 
 def escritura():
     instr = actual()
@@ -260,7 +332,6 @@ def escritura():
     if not coincidir(')'):
         error(f"Se esperaba ')' en {instr}")
     print(f"[gen] imprimir resultado(s) en consola ({instr})")
-
 
 def lectura():
     instr = actual()
@@ -297,6 +368,9 @@ def factor():
     if es_entero():
         print(f"[gen] cargar entero {actual()} en fa0")
         coincidir(actual())
+    elif get_etiqueta(actual()) == 'flotante':  # Aquí agregamos el chequeo para flotante
+        print(f"[gen] cargar flotante {actual()} en fa0")
+        coincidir(actual())
     elif es_identificador():
         print(f"[gen] cargar variable {actual()} en fa0")
         coincidir(actual())
@@ -322,5 +396,70 @@ def funcion_intrinseca():
         error("Se esperaba ')' en función intrínseca")
     print(f"[gen] llamar a función '{func}' con argumento en fa0")
 
+# Tabla de símbolos y manejo de registros
+tabla_simbolos = {}
+
+registros_float = [f"ft{i}" for i in range(32)]
+registros_int = [f"x{i}" for i in range(32)]
+registros_char = [f"a{i}" for i in range(8)]
+
+indice_float = 0
+indice_int = 0
+indice_char = 0
+indice_mem_float = 0
+indice_mem_int = 0
+indice_mem_char = 0
+indice_mem_string = 0
+
+def agregar_variable(nombre, tipo):
+    global indice_float, indice_int, indice_char
+    global indice_mem_float, indice_mem_int, indice_mem_char, indice_mem_string
+
+    if nombre in tabla_simbolos:
+        raise Exception(f"Error: Variable '{nombre}' redeclarada.")
+
+    if tipo == 'float':
+        if indice_float < len(registros_float):
+            registro = registros_float[indice_float]
+            indice_float += 1
+        else:
+            registro = f"mem_float_{indice_mem_float}"
+            indice_mem_float += 1
+
+    elif tipo == 'int':
+        if indice_int < len(registros_int):
+            registro = registros_int[indice_int]
+            indice_int += 1
+        else:
+            registro = f"mem_int_{indice_mem_int}"
+            indice_mem_int += 1
+
+    elif tipo == 'char':
+        if indice_char < len(registros_char):
+            registro = registros_char[indice_char]
+            indice_char += 1
+        else:
+            registro = f"mem_char_{indice_mem_char}"
+            indice_mem_char += 1
+
+    elif tipo == 'string':
+        registro = f"mem_string_{indice_mem_string}"
+        indice_mem_string += 1
+
+    else:
+        raise Exception(f"Error: Tipo desconocido '{tipo}'.")
+
+    tabla_simbolos[nombre] = {
+        'tipo': tipo,
+        'registro': registro
+    }
+
+def imprimir_tabla():
+    print(f"{'Nombre':<10} {'Tipo':<10} {'Registro/Memoria':<20}")
+    print("-" * 40)
+    for nombre, info in tabla_simbolos.items():
+        print(f"{nombre:<10} {info['tipo']:<10} {info['registro']:<20}")
+
 # Ejecutar análisis sintáctico
 analizar_programa()
+
