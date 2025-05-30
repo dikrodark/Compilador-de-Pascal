@@ -1,465 +1,178 @@
-# Etapa 1 del análisis léxico: cargar archivos
-with open('CicloFor.pas', 'r') as archivo:
-    texto = archivo.read()
-
-print("=== CÓDIGO ORIGINAL ===")
-print(texto)
-print("=======================\n")
-
-
-# Lista de separadores y especiales
-separadores = [' ', '\t', '\n']
-especiales = "{}:;,+-*/=()[]<>.'\""
-
-palabras_reservadas = {
-    'program', 'begin', 'end', 'var', 'integer', 'real', 'boolean', 'char', 'string',
-    'if', 'then', 'else', 'while', 'do', 'for', 'to', 'downto', 'repeat', 'until',
-    'function', 'procedure', 'and', 'or', 'not', 'div', 'mod', 'true', 'false',
-    'writeln', 'readln', 'write', 'read'
-}
-
-# Lista adicional para funciones matemáticas intrínsecas
-funciones_intrinsecas = {'sin', 'cos', 'tan'}
-
-# Etapa 2 del análisis léxico: quitar comentarios tipo (* ... *)
-def quitar_comentarios(texto):
-    resultado = ''
-    i = 0
-    estado = 'Z'  # Z: fuera comentario, COM: dentro comentario
-    while i < len(texto):
-        if estado == 'Z':
-            if texto[i] == '(' and i + 1 < len(texto) and texto[i+1] == '*':
-                estado = 'COM'
-                i += 2
-            else:
-                resultado += texto[i]
-                i += 1
-        else:
-            if texto[i] == '*' and i + 1 < len(texto) and texto[i+1] == ')':
-                estado = 'Z'
-                i += 2
-            else:
-                i += 1
-    return resultado
-
-texto_sin_comentarios = quitar_comentarios(texto)
-
-
-print("=== CÓDIGO SIN COMENTARIOS ===")
-print(texto_sin_comentarios)
-print("================================\n")
-
-# Etapa 3: separar en tokens (ahora con cadenas)
-tokens = []
-token = ''
-i = 0
-n = len(texto_sin_comentarios)
-
-while i < n:
-    if i < n-1 and texto_sin_comentarios[i] == ':' and texto_sin_comentarios[i+1] == '=':
-        if token:
-            tokens.append(token.lower())
-            token = ''
-        tokens.append(':=')
-        i += 2
-        continue
-
-    letra = texto_sin_comentarios[i]
-
-    if letra == '"':
-        if token:
-            tokens.append(token.lower())
-            token = ''
-        cadena = '"'
-        i += 1
-        while i < n:
-            cadena += texto_sin_comentarios[i]
-            if texto_sin_comentarios[i] == '"':
-                i += 1
-                break
-            i += 1
-        tokens.append(cadena)
-        continue
-
-    if letra in separadores:
-        if token:
-            tokens.append(token.lower())
-            token = ''
-        i += 1
-        continue
-
-    elif letra in especiales:
-        if token:
-            tokens.append(token.lower())
-            token = ''
-        tokens.append(letra.lower())
-        i += 1
-        continue
-
-    else:
-        # Para manejar números reales: agregado robustez para puntos decimales únicos
-        if letra.isdigit() or letra == '.':
-            token += letra
-            i += 1
-            # Avanzamos mientras sigan dígitos o un solo punto decimal
-            punto_contado = token.count('.')
-            while i < n and (texto_sin_comentarios[i].isdigit() or (texto_sin_comentarios[i] == '.' and punto_contado == 0)):
-                if texto_sin_comentarios[i] == '.':
-                    punto_contado += 1
-                token += texto_sin_comentarios[i]
-                i += 1
-            tokens.append(token.lower())
-            token = ''
-        else:
-            token += letra
-            i += 1
-
-
-if token:
-    tokens.append(token.lower())
-
-# Etapa 4: Etiquetado de tokens
-def get_etiqueta(t):
-    operadores_asignacion = {':='}
-    operadores_aritmeticos = {'+', '-', '*', '/', 'div', 'mod'}
-    operadores_comparacion = {'=', '<>', '<', '>', '<=', '>='}
-    delimitadores = {';', ',', '(', ')', '[', ']', '{', '}', '.', ':', '"'}
-
-    if t.startswith('"') and t.endswith('"'):
-        return 'cadena'
-    elif t in funciones_intrinsecas:
-        return 'función intrínseca'
-    elif t in operadores_asignacion:
-        return 'operador de asignación'
-    elif t in operadores_aritmeticos:
-        return 'operador aritmético'
-    elif t in operadores_comparacion:
-        return 'operador de comparación'
-    elif t in delimitadores:
-        return 'delimitador'
-    elif t in palabras_reservadas:
-        return 'palabra reservada'
-    elif t[0].isalpha() or t[0] == '_':
-        return 'identificador'
-    elif t.isdigit():
-        return 'entero'
-    elif t.count('.') == 1 and all(part.isdigit() for part in t.split('.')):
-        return 'flotante'  # Cambiado de 'real' a 'flotante'
-    else:
-        return 'desconocido'
-    
-print("=== TOKENS GENERADOS ===")
-for t in tokens:
-    print(f"{t:<20} => {get_etiqueta(t)}")
-print("=========================\n")
-    
-
-# === ANALIZADOR SINTÁCTICO ===
-
-pos = 0
-
-def actual():
-    return tokens[pos] if pos < len(tokens) else None
-
-def coincidir(esperado):
-    global pos
-    if actual() == esperado:
-        pos += 1
-        return True
-    return False
-
-def es_identificador():
-    return actual() is not None and get_etiqueta(actual()) == 'identificador'
-
-def es_entero():
-    return actual() is not None and get_etiqueta(actual()) == 'entero'
-
-def error(msg):
-    raise SyntaxError(f"{msg}. Token encontrado: '{actual()}'")
-
-def analizar_programa():
-    if not coincidir('program'):
-        error("Se esperaba 'program' al inicio")
-
-    if not es_identificador():
-        error("Se esperaba el nombre del programa")
-    nombre_programa = actual()
-    coincidir(nombre_programa)
-
-    if not coincidir(';'):
-        error("Se esperaba ';' después del nombre del programa")
-
-    # Aceptar múltiples bloques var
-    while actual() == 'var':
-        coincidir('var')
-        declaracion_variable()
-        if not coincidir(';'):
-            error("Se esperaba ';' después de declaración de variable")
-
-    if not coincidir('begin'):
-        error("Se esperaba 'begin' antes de las sentencias")
-
-    while actual() not in ('end', None):
-        # Ignorar tokens ';' sueltos antes de sentencia
-        while actual() == ';':
-            coincidir(';')
-
-        if actual() in ('end', None):
-            break
-
-        sentencia()
-
-        if actual() not in ('end', '.'):
-            if not coincidir(';'):
-                error("Se esperaba ';' después de la sentencia")
-
-    if not coincidir('end'):
-        error("Se esperaba 'end' al final del bloque")
-    if not coincidir('.'):
-        error("Se esperaba '.' al final del programa")
-
-    print("Análisis sintáctico finalizado correctamente.")
-
-    # Mostrar tabla de símbolos al final
-    print("\n=== TABLA DE SÍMBOLOS ===")
-    imprimir_tabla()
-
-def declaracion_variable():
-    if not es_identificador():
-        error("Se esperaba un identificador en declaración de variable")
-    var_name = actual()
-    coincidir(var_name)
-
-    if not coincidir(':'):
-        error("Se esperaba ':' en declaración de variable")
-
-    tipo = actual()
-    tipos_validos = {'integer', 'real', 'boolean', 'char', 'string'}
-    if tipo not in tipos_validos:
-        error("Se esperaba tipo válido en declaración de variable")
-    coincidir(tipo)
-
-    print(f"[gen] declarar variable '{var_name}' de tipo '{tipo}'")
-
-    tipo_mapeado = {
-        'real': 'float',
-        'integer': 'int',
-        'boolean': 'int',
-        'char': 'char',
-        'string': 'string'
-    }[tipo]
-
-    agregar_variable(var_name, tipo_mapeado)
-
-def sentencia():
-    if es_identificador():
-        asignacion()
-    elif actual() == 'for':
-        for_loop()
-    elif actual() in ('write', 'writeln'):
-        escritura()
-    elif actual() in ('read', 'readln'):
-        lectura()
-    else:
-        error("Sentencia no válida")
-
-def asignacion():
-    id_nombre = actual()
-    coincidir(id_nombre)
-    if not coincidir(':='):
-        error("Se esperaba ':=' en asignación")
-    expresion()
-    print(f"[gen] Guardar resultado de expresión en '{id_nombre}'")
-
-def for_loop():
-    if not coincidir('for'):
-        error("Se esperaba 'for'")
-
-    if not coincidir('('):
-        error("Se esperaba '(' después de 'for'")
-
-    var = actual()
-    if not es_identificador():
-        error("Se esperaba un identificador en el for")
-    coincidir(var)
-
-    if not coincidir(':='):
-        error("Se esperaba ':=' en la asignación del for")
-
-    expresion()  # expresión de inicio
-
-    if not coincidir(';'):
-        error("Se esperaba ';' entre la asignación y el límite del for")
-
-    expresion()  # expresión de fin
-
-    if not coincidir(')'):
-        error("Se esperaba ')' al final del encabezado del for")
-
-    if not coincidir('{'):
-        error("Se esperaba '{' para abrir el bloque del for")
-
-    print(f"[gen] inicio bucle for con variable '{var}'")
-
-    while actual() != '}':
-        if actual() is None:
-            error("Se esperaba '}' para cerrar el bloque del for")
-        sentencia()
-        if actual() == ';':
-            coincidir(';')
-
-    if not coincidir('}'):
-        error("Se esperaba '}' al final del bloque del for")
-
-    print(f"[gen] fin del bucle for con variable '{var}'")
-
-def escritura():
-    instr = actual()
-    coincidir(instr)
-    if not coincidir('('):
-        error(f"Se esperaba '(' en {instr}")
-
-    if actual() != ')':
-        while True:
-            if get_etiqueta(actual()) == 'cadena':
-                print(f"[gen] cadena literal: {actual()}")
-                coincidir(actual())
-            else:
-                expresion()
-            if not coincidir(','):
-                break
-
-    if not coincidir(')'):
-        error(f"Se esperaba ')' en {instr}")
-    print(f"[gen] imprimir resultado(s) en consola ({instr})")
-
-def lectura():
-    instr = actual()
-    coincidir(instr)
-    if not coincidir('('):
-        error(f"Se esperaba '(' en {instr}")
-    while True:
-        if not es_identificador():
-            error("Se esperaba identificador en read")
-        print(f"[gen] leer valor para '{actual()}'")
-        coincidir(actual())
-        if not coincidir(','):
-            break
-    if not coincidir(')'):
-        error(f"Se esperaba ')' en {instr}")
-
-def expresion():
-    termino()
-    while actual() in ('+', '-'):
-        op = actual()
-        coincidir(op)
-        termino()
-        print(f"[gen] aplicar operador {op}")
-
-def termino():
-    factor()
-    while actual() in ('*', '/', 'div', 'mod'):
-        op = actual()
-        coincidir(op)
-        factor()
-        print(f"[gen] aplicar operador {op}")
-
-def factor():
-    if es_entero():
-        print(f"[gen] cargar entero {actual()} en fa0")
-        coincidir(actual())
-    elif get_etiqueta(actual()) == 'flotante':  # Aquí agregamos el chequeo para flotante
-        print(f"[gen] cargar flotante {actual()} en fa0")
-        coincidir(actual())
-    elif es_identificador():
-        print(f"[gen] cargar variable {actual()} en fa0")
-        coincidir(actual())
-    elif actual() in funciones_intrinsecas:
-        funcion_intrinseca()
-    elif coincidir('('):
-        expresion()
-        if not coincidir(')'):
-            error("Se esperaba ')' en expresión")
-    elif get_etiqueta(actual()) == 'cadena':
-        print(f"[gen] cadena literal: {actual()}")
-        coincidir(actual())
-    else:
-        error("Factor inválido")
-
-def funcion_intrinseca():
-    func = actual()
-    coincidir(func)
-    if not coincidir('('):
-        error("Se esperaba '(' en función intrínseca")
-    expresion()
-    if not coincidir(')'):
-        error("Se esperaba ')' en función intrínseca")
-    print(f"[gen] llamar a función '{func}' con argumento en fa0")
-
-# Tabla de símbolos y manejo de registros
-tabla_simbolos = {}
-
-registros_float = [f"ft{i}" for i in range(32)]
-registros_int = [f"x{i}" for i in range(32)]
-registros_char = [f"a{i}" for i in range(8)]
-
-indice_float = 0
-indice_int = 0
-indice_char = 0
-indice_mem_float = 0
-indice_mem_int = 0
-indice_mem_char = 0
-indice_mem_string = 0
-
-def agregar_variable(nombre, tipo):
-    global indice_float, indice_int, indice_char
-    global indice_mem_float, indice_mem_int, indice_mem_char, indice_mem_string
-
-    if nombre in tabla_simbolos:
-        raise Exception(f"Error: Variable '{nombre}' redeclarada.")
-
-    if tipo == 'float':
-        if indice_float < len(registros_float):
-            registro = registros_float[indice_float]
-            indice_float += 1
-        else:
-            registro = f"mem_float_{indice_mem_float}"
-            indice_mem_float += 1
-
-    elif tipo == 'int':
-        if indice_int < len(registros_int):
-            registro = registros_int[indice_int]
-            indice_int += 1
-        else:
-            registro = f"mem_int_{indice_mem_int}"
-            indice_mem_int += 1
-
-    elif tipo == 'char':
-        if indice_char < len(registros_char):
-            registro = registros_char[indice_char]
-            indice_char += 1
-        else:
-            registro = f"mem_char_{indice_mem_char}"
-            indice_mem_char += 1
-
-    elif tipo == 'string':
-        registro = f"mem_string_{indice_mem_string}"
-        indice_mem_string += 1
-
-    else:
-        raise Exception(f"Error: Tipo desconocido '{tipo}'.")
-
-    tabla_simbolos[nombre] = {
-        'tipo': tipo,
-        'registro': registro
-    }
-
-def imprimir_tabla():
-    print(f"{'Nombre':<10} {'Tipo':<10} {'Registro/Memoria':<20}")
-    print("-" * 40)
-    for nombre, info in tabla_simbolos.items():
-        print(f"{nombre:<10} {info['tipo']:<10} {info['registro']:<20}")
-
-# Ejecutar análisis sintáctico
-analizar_programa()
-
+import re
+
+class RiscVGenerator:
+    def __init__(self):
+        self.data_section = []
+        self.text_section = ["main:"]
+        self.variables = {}
+        self.label_count = 0
+        self.for_stack = []
+
+    def unique_label(self, base):
+        self.label_count += 1
+        return f"{base}_{self.label_count}"
+
+    def declare_variable(self, name, vartype):
+        if vartype == "integer":
+            self.data_section.append(f"{name}: .word 0")
+            self.variables[name] = "int"
+        elif vartype == "real":
+            self.data_section.append(f"{name}: .float 0.0")
+            self.variables[name] = "float"
+
+    def generate(self, lines):
+        for line in lines:
+            line = line.strip()
+            if line.startswith("DECLARE"):
+                _, name, _, vartype = line.split()
+                self.declare_variable(name, vartype)
+            elif line.startswith("READ"):
+                var = line.split()[1]
+                if self.variables[var] == "int":
+                    self.text_section += [
+                        "li a7, 5",
+                        "ecall",
+                        f"sw a0, {var}"
+                    ]
+                else:
+                    self.text_section += [
+                        "li a7, 6",
+                        "ecall",
+                        f"s.s fa0, {var}"
+                    ]
+            elif line.startswith("PRINT"):
+                content = line[6:].strip()
+                if content.startswith('"'):
+                    label = self.unique_label("msg")
+                    self.data_section.append(f'{label}: .asciiz {content}')
+                    self.text_section += [
+                        f"la a0, {label}",
+                        "li a7, 4",
+                        "ecall"
+                    ]
+                elif content in self.variables:
+                    vartype = self.variables[content]
+                    if vartype == "int":
+                        self.text_section += [
+                            f"lw a0, {content}",
+                            "li a7, 1",
+                            "ecall"
+                        ]
+                    else:
+                        self.text_section += [
+                            f"l.s fa0, {content}",
+                            "li a7, 2",
+                            "ecall"
+                        ]
+                    # Optional: print newline
+                    self.text_section += [
+                        "li a0, 10",
+                        "li a7, 11",
+                        "ecall"
+                    ]
+            elif ":=" in line:
+                target, expr = line.split(":=")
+                target = target.strip()
+                expr = expr.strip()
+                tokens = expr.split()
+
+                if len(tokens) == 1:
+                    # Simple assignment
+                    if self.variables[target] == "int":
+                        if tokens[0].isdigit():
+                            self.text_section += [
+                                f"li t0, {tokens[0]}",
+                                f"sw t0, {target}"
+                            ]
+                        else:
+                            self.text_section += [
+                                f"lw t0, {tokens[0]}",
+                                f"sw t0, {target}"
+                            ]
+                    else:
+                        # real (float) assignment
+                        self.text_section += [
+                            f"l.s f0, {tokens[0]}",
+                            f"s.s f0, {target}"
+                        ]
+                elif len(tokens) == 3:
+                    op1, operator, op2 = tokens
+                    if self.variables[target] == "int":
+                        self.text_section += [
+                            f"lw t0, {op1}",
+                            f"lw t1, {op2}",
+                        ]
+                        if operator == '+':
+                            self.text_section.append("add t2, t0, t1")
+                        elif operator == '-':
+                            self.text_section.append("sub t2, t0, t1")
+                        elif operator == '*':
+                            self.text_section.append("mul t2, t0, t1")
+                        elif operator == '/':
+                            self.text_section.append("div t2, t0, t1")
+                        self.text_section.append(f"sw t2, {target}")
+                    else:
+                        self.text_section += [
+                            f"l.s f1, {op1}",
+                            f"l.s f2, {op2}"
+                        ]
+                        if operator == '+':
+                            self.text_section.append("fadd.s f3, f1, f2")
+                        elif operator == '-':
+                            self.text_section.append("fsub.s f3, f1, f2")
+                        elif operator == '*':
+                            self.text_section.append("fmul.s f3, f1, f2")
+                        elif operator == '/':
+                            self.text_section.append("fdiv.s f3, f1, f2")
+                        self.text_section.append(f"s.s f3, {target}")
+            elif line.startswith("FOR_INICIO"):
+                match = re.match(r"FOR_INICIO (\w+) := (\d+) TO (\d+)", line)
+                var, start, end = match.groups()
+                start_label = self.unique_label("for_start")
+                end_label = self.unique_label("for_end")
+                self.for_stack.append((var, end, start_label, end_label))
+                self.text_section += [
+                    f"li t0, {start}",
+                    f"sw t0, {var}",
+                    f"{start_label}:",
+                    f"lw t0, {var}",
+                    f"li t1, {end}",
+                    f"bgt t0, t1, {end_label}"
+                ]
+            elif line.startswith("FOR_FIN"):
+                var, _, _, _ = self.for_stack[-1]
+                start_label, end_label = self.for_stack[-1][2], self.for_stack[-1][3]
+                self.text_section += [
+                    f"lw t0, {var}",
+                    "addi t0, t0, 1",
+                    f"sw t0, {var}",
+                    f"j {start_label}",
+                    f"{end_label}:"
+                ]
+                self.for_stack.pop()
+
+        # Exit syscall
+        self.text_section += [
+            "li a7, 10",
+            "ecall"
+        ]
+
+    def emit(self):
+        return (
+            ".data\n" + "\n".join(self.data_section) +
+            "\n\n.text\n.globl main\n" + "\n".join(self.text_section)
+        )
+
+
+# === EJEMPLO DE USO ===
+code_lines = [
+    "DECLARE i : integer",
+    "FOR_INICIO i := 1 TO 5",
+    "PRINT i",
+    "FOR_FIN i"
+]
+
+gen = RiscVGenerator()
+gen.generate(code_lines)
+output = gen.emit()
+print(output)

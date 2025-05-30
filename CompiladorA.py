@@ -18,7 +18,7 @@ palabras_reservadas = {
     'writeln', 'readln', 'write', 'read'
 }
 
-# Funciones intrínsecas
+# Funciones matemáticas intrínsecas
 funciones_intrinsecas = {'sin', 'cos', 'tan'}
 
 # Etapa 2 del análisis léxico: quitar comentarios tipo (* ... *)
@@ -49,7 +49,7 @@ print("=== CÓDIGO SIN COMENTARIOS ===")
 print(texto_sin_comentarios)
 print("================================\n")
 
-# Etapa 3: separar en tokens (ahora con cadenas)
+# Etapa 3: separar en tokens 
 tokens = []
 token = ''
 i = 0
@@ -97,7 +97,7 @@ while i < n:
         continue
 
     else:
-        # Para números reales
+        # Para manejar números reales
         if letra.isdigit() or letra == '.':
             token += letra
             i += 1
@@ -156,7 +156,7 @@ for t in tokens:
 print("=========================\n")
     
 
-# === ANALISIS SEMANTICO Y SINTÁCTICO ===
+# === ANALIZADOR SINTÁCTICO ===
 
 pos = 0
 codigo_intermedio = []
@@ -284,7 +284,7 @@ def asignacion():
     if not coincidir(':='):
         error("Se esperaba ':=' en asignación")
 
-    # Manejo para funciones intrínsecas
+    
     if actual() in funciones_intrinsecas:
         temp_resultado = funcion_intrinseca()
     else:
@@ -292,8 +292,6 @@ def asignacion():
         print(f"Expresión posfija: {' '.join(posfija)}")
 
     emit(f'{id_nombre} := {temp_resultado}')
-
-    #Sintaxis del For
 
 def for_loop():
     if not coincidir('for'):
@@ -309,7 +307,8 @@ def for_loop():
 
     if not coincidir(':='):
         error("Se esperaba ':=' en la asignación del for")
-   
+
+    
     inicio = actual()
     if inicio is None:
         error("Se esperaba expresión de inicio en el for")
@@ -387,7 +386,7 @@ def lectura():
     for var in variables_a_leer:
         emit(f'READ {var}')  
 
-# Prioridad operadores
+
 def obtenerPrioridadOperador(op):
     if op in ['+', '-']:
         return 1
@@ -397,7 +396,7 @@ def obtenerPrioridadOperador(op):
         return 3
     return 0
 
-# Conversión de infija a posfija
+
 def convertirInfijaAPostfija(infija):
     pila = []
     salida = []
@@ -420,7 +419,6 @@ def convertirInfijaAPostfija(infija):
     return salida
 
 
-#Expresiones
 def expresion():
     infija = []
     paren_count = 0
@@ -554,11 +552,10 @@ def imprimir_tabla():
 # Ejecutar análisis sintáctico
 analizar_programa()
 
+# Generar codigo RiscV
+print("\n=== CÓDIGO ENSAMBLADOR RISC-V ===\n")
 
-# Generar Codigo RISCV
-print("\n=== CÓDIGO ENSAMBLADOR RISC-V ===")
-
-registros_disponibles = ['t0', 't1', 't2', 't3', 't4', 't5', 't6']
+registros_disponibles = [f't{i}' for i in range(32)]
 registros = {}
 contador_etiquetas = 0
 
@@ -577,89 +574,87 @@ def obtener_registro(var):
             raise RuntimeError(f"No hay registros disponibles para '{var}'")
     return registros[var]
 
-for instruccion in codigo_intermedio:
-    partes = instruccion.split()
+def traducir_instruccion(instr):
+    partes = instr.split()
+    if not partes:
+        return []
+
+    codigo = []
 
     if partes[0] == 'DECLARE':
-        continue  
-
+        codigo.append(f"# Reservar espacio para variable {partes[1]}")
     elif partes[0] == 'READ':
-        reg = obtener_registro(partes[1])
-        print(f"# Leer valor para {partes[1]}")
-        print(f"    li a7, 5")
-        print(f"    ecall")
-        print(f"    mv {reg}, a0")
-
+        var = partes[1]
+        reg_var = obtener_registro(var)
+        codigo.append("li a7, 5")
+        codigo.append("ecall")
+        codigo.append(f"mv {reg_var}, a0")
+    elif partes[1] == ':=' and len(partes) == 3:
+        var = partes[0]
+        valor = partes[2]
+        reg_var = obtener_registro(var)
+        try:
+            val_num = int(valor)
+            codigo.append(f"li {reg_var}, {val_num}")
+        except ValueError:
+            reg_val = obtener_registro(valor)
+            codigo.append(f"mv {reg_var}, {reg_val}")
+    elif partes[1] == ':=' and len(partes) == 5:
+        temp = partes[0]
+        var1 = partes[2]
+        op = partes[3]
+        var2 = partes[4]
+        reg_temp = obtener_registro(temp)
+        try:
+            if op == '+':
+                try:
+                    val1 = int(var1)
+                    reg_var2 = obtener_registro(var2)
+                    codigo.append(f"addi {reg_temp}, {reg_var2}, {val1}")
+                except ValueError:
+                    reg_var1 = obtener_registro(var1)
+                    try:
+                        val2 = int(var2)
+                        codigo.append(f"addi {reg_temp}, {reg_var1}, {val2}")
+                    except ValueError:
+                        reg_var2 = obtener_registro(var2)
+                        codigo.append(f"add {reg_temp}, {reg_var1}, {reg_var2}")
+            elif op == '-':
+                reg_var1 = obtener_registro(var1)
+                try:
+                    val2 = int(var2)
+                    codigo.append(f"addi {reg_temp}, {reg_var1}, {-val2}")
+                except ValueError:
+                    reg_var2 = obtener_registro(var2)
+                    codigo.append(f"sub {reg_temp}, {reg_var1}, {reg_var2}")
+            elif op == '*':
+                reg_var1 = obtener_registro(var1)
+                reg_var2 = obtener_registro(var2)
+                codigo.append(f"mul {reg_temp}, {reg_var1}, {reg_var2}")
+            elif op == '/':
+                reg_var1 = obtener_registro(var1)
+                reg_var2 = obtener_registro(var2)
+                codigo.append(f"div {reg_temp}, {reg_var1}, {reg_var2}")
+            else:
+                codigo.append(f"# Operador {op} no soportado")
+        except Exception:
+            codigo.append(f"# Error en traducción de instrucción: {instr}")
     elif partes[0] == 'PRINT':
         arg = partes[1]
         if arg.startswith('"') and arg.endswith('"'):
-            label = nuevo_etiqueta()
-            print(f"    .data\n{label}: .asciz {arg}")
-            print("    .text")
-            print(f"    la a0, {label}")
-            print("    li a7, 4")
-            print("    ecall")
+            codigo.append(f"# print string literal {arg}")
         else:
-            reg = obtener_registro(arg)
-            print(f"    mv a0, {reg}")
-            print("    li a7, 1")
-            print("    ecall")
+            reg_print = obtener_registro(arg)
+            codigo.append(f"mv a0, {reg_print}")
+            codigo.append("li a7, 1")
+            codigo.append("ecall")
+    else:
+        codigo.append(f"# Instrucción no reconocida: {instr}")
 
-    elif partes[0].startswith("t") or (len(partes) > 2 and partes[1] == ":="):
-        dest = partes[0]
-        if partes[1] != ':=':
-            continue
-        if partes[2] == 'LLAMAR_FUNCION':
-            temp = obtener_registro(dest)
-            funcion = partes[3]
-            arg = partes[4]
-            reg_arg = obtener_registro(arg)
-            print(f"    # {dest} := {funcion}({arg})")
-            print(f"    # Aquí deberías llamar a {funcion} con {reg_arg} (simulado)")
-            print(f"    mv {temp}, {reg_arg}")
-        elif len(partes) == 4:
-            dest_reg = obtener_registro(dest)
-            src = partes[2]
-            if src.isdigit():
-                print(f"    li {dest_reg}, {src}")
-            else:
-                src_reg = obtener_registro(src)
-                print(f"    mv {dest_reg}, {src_reg}")
-        elif len(partes) == 6:
-            dest_reg = obtener_registro(dest)
-            izq = partes[2]
-            op = partes[3]
-            der = partes[4]
-            r1 = obtener_registro(izq)
-            r2 = obtener_registro(der)
-            instr = {
-                '+': 'add',
-                '-': 'sub',
-                '*': 'mul',
-                '/': 'div'
-            }.get(op, None)
-            if instr:
-                print(f"    {instr} {dest_reg}, {r1}, {r2}")
-            else:
-                print(f"    # Operador no soportado: {op}")
+    return codigo
 
-    elif partes[0] == 'FOR_INICIO':
-        var = partes[1]
-        inicio = partes[3]
-        fin = partes[5]
-        reg_var = obtener_registro(var)
-        reg_fin = obtener_registro(f"{var}_fin")
-        print(f"    li {reg_var}, {inicio}")
-        print(f"    li {reg_fin}, {fin}")
-        etiqueta_inicio = nuevo_etiqueta()
-        etiqueta_fin = nuevo_etiqueta()
-        print(f"{etiqueta_inicio}:")
-    elif partes[0] == 'FOR_FIN':
-        var = partes[1]
-        reg_var = obtener_registro(var)
-        reg_fin = obtener_registro(f"{var}_fin")
-        print(f"    addi {reg_var}, {reg_var}, 1")
-        print(f"    ble {reg_var}, {reg_fin}, {etiqueta_inicio}")
-        print(f"{etiqueta_fin}:")
 
-print("===============================")
+for instr in codigo_intermedio:
+    instrucciones_asm = traducir_instruccion(instr)
+    for linea in instrucciones_asm:
+        print(linea)
